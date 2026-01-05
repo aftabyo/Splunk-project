@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 
+// ADD THIS LINE HERE:
+// This tells Node.js to trust the self-signed certificate from your local machine/ngrok.
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; 
+
 export async function POST(request) {
   try {
     const body = await request.json();
@@ -13,6 +17,7 @@ export async function POST(request) {
       index: "main" 
     };
 
+    // Use your new ngrok URL here if you haven't updated your Vercel .env yet
     await fetch(process.env.SPLUNK_HEC_URL, {
       method: 'POST',
       headers: {
