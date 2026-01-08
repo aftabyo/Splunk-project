@@ -19,29 +19,40 @@ export default function SplunkPortfolioHome() {
   const [showSplash, setShowSplash] = useState(true);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
 
-  // The core logging function for hover events
+ // The core logging function - This sends data to Axiom via your Vercel route
   const logHover = async (action, details) => {
     try {
       await fetch('/api/log', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, details }),
+        body: JSON.stringify({ 
+          action, 
+          details,
+          source: "portfolio_frontend",
+          user_agent: navigator.userAgent 
+        }),
       });
-      fetchStats(); // Update dashboard counts immediately
+      // We don't call fetchStats() immediately anymore because Axiom takes 
+      // a few seconds to index. Let the interval handle it.
     } catch (err) {
-      console.error("Splunk HEC Log Failed:", err);
+      console.error("Axiom Logging Failed:", err);
     }
   };
 
+  // This pulls the stats BACK from Axiom to show on your dashboard
   const fetchStats = async () => {
     try {
       const res = await fetch('/api/stats');
+      if (!res.ok) return; // Exit quietly if route isn't ready
+      
       const json = await res.json();
-      if (json.stats || json.audit) {
-        setData({ stats: json.stats || [], audit: json.audit || [] });
-      }
+      // Ensure we are setting the data correctly based on the Axiom response
+      setData({ 
+        stats: json.stats || [], 
+        audit: json.audit || [] 
+      });
     } catch (err) {
-      console.error("Management API Fetch Error:", err);
+      console.log("Waiting for Axiom data...");
     }
   };
 
