@@ -4,16 +4,26 @@ export async function POST(request) {
   try {
     const body = await request.json();
     
-    // DEBUG: This will show up in your Vercel 'Logs' tab
-    console.log("DEBUG: Attempting to send to dataset:", process.env.NEXT_PUBLIC_AXIOM_DATASET);
-    console.log("DEBUG: Token exists:", !!process.env.NEXT_PUBLIC_AXIOM_TOKEN);
+    // Using your exact Vercel variable names
+    const endpoint = process.env.NEXT_PUBLIC_AXIOM_INGEST_ENDPOINT;
+    const token = process.env.NEXT_PUBLIC_AXIOM_TOKEN;
 
-    const axiomPayload = [{ ...body, _time: new Date().toISOString() }];
+    if (!endpoint || !token) {
+      console.error("CONFIG ERROR: Vercel environment variables are missing.");
+      return NextResponse.json({ error: "Configuration Missing" }, { status: 500 });
+    }
 
-    const response = await fetch(`https://api.axiom.co/v1/datasets/${process.env.NEXT_PUBLIC_AXIOM_DATASET}/ingest`, {
+    // Axiom expects an array of objects
+    const axiomPayload = [{ 
+      ...body, 
+      _time: new Date().toISOString(),
+      source: "portfolio-site" 
+    }];
+
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_AXIOM_TOKEN}`,
+        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(axiomPayload),
@@ -21,13 +31,13 @@ export async function POST(request) {
 
     if (!response.ok) {
       const errorDetail = await response.text();
-      console.error("AXIOM REJECTED DATA:", errorDetail);
-      return NextResponse.json({ error: errorDetail }, { status: response.status });
+      console.error("AXIOM_REJECTION:", errorDetail);
+      return NextResponse.json({ error: "Axiom rejected the log" }, { status: response.status });
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("CRITICAL_SERVER_ERROR:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("RUNTIME_ERROR:", error.message);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

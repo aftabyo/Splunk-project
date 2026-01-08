@@ -1,39 +1,42 @@
 import { NextResponse } from 'next/server';
 
-export async function GET() {
-  // APL Query equivalents for your SPL searches
-  const dataset = process.env.NEXT_PUBLIC_AXIOM_DATASET;
-  const chartQuery = `['${dataset}'] | summarize count() by details`;
-  const rawQuery = `['${dataset}'] | order by _time desc | take 10 | project _time, action, details`;
-
+export async function POST(request) {
   try {
-    const fetchAxiom = async (apl) => {
-      const res = await fetch(`https://api.axiom.co/v1/datasets/_apl?format=tabular`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_AXIOM_TOKEN}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ apl })
-      });
-      return res.json();
-    };
+    const body = await request.json();
+    
+    // Use the full endpoint you already defined in Vercel
+    const endpoint = process.env.NEXT_PUBLIC_AXIOM_INGEST_ENDPOINT;
+    const token = process.env.NEXT_PUBLIC_AXIOM_TOKEN;
 
-    const [chartData, rawData] = await Promise.all([
-      fetchAxiom(chartQuery),
-      fetchAxiom(rawQuery)
-    ]);
+    if (!endpoint || !token) {
+      console.error("CONFIG ERROR: Missing Ingest Endpoint or Token");
+      return NextResponse.json({ error: "Configuration Missing" }, { status: 500 });
+    }
 
-    return NextResponse.json({
-      stats: (chartData.matches || []).map(r => ({
-        name: r.details || "Unknown_Event",
-        value: r['count()'] || 0
-      })),
-      audit: rawData.matches || []
+    const axiomPayload = [{ 
+      ...body, 
+      _time: new Date().toISOString(),
+      platform: "vercel-production" 
+    }];
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(axiomPayload),
     });
 
+    if (!response.ok) {
+      const errorDetail = await response.text();
+      console.error("AXIOM_REJECTION:", errorDetail);
+      return NextResponse.json({ error: errorDetail }, { status: response.status });
+    }
+
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("AXIOM_STATS_ERROR:", error.message);
+    console.error("RUNTIME_ERROR:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
