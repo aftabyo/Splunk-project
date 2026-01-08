@@ -4,15 +4,12 @@ export async function POST(request) {
   try {
     const body = await request.json();
     
-    // Axiom expects an array of objects for ingestion
-    const axiomPayload = [{
-      ...body,
-      project: "aftabyo-portfolio",
-      visitor_ip: request.headers.get('x-forwarded-for') || '127.0.0.1',
-      _time: new Date().toISOString()
-    }];
+    // DEBUG: This will show up in your Vercel 'Logs' tab
+    console.log("DEBUG: Attempting to send to dataset:", process.env.NEXT_PUBLIC_AXIOM_DATASET);
+    console.log("DEBUG: Token exists:", !!process.env.NEXT_PUBLIC_AXIOM_TOKEN);
 
-    // Axiom Ingest URL format: https://api.axiom.co/v1/datasets/{dataset_name}/ingest
+    const axiomPayload = [{ ...body, _time: new Date().toISOString() }];
+
     const response = await fetch(`https://api.axiom.co/v1/datasets/${process.env.NEXT_PUBLIC_AXIOM_DATASET}/ingest`, {
       method: 'POST',
       headers: {
@@ -23,13 +20,14 @@ export async function POST(request) {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Axiom Ingest Failed: ${errorText}`);
+      const errorDetail = await response.text();
+      console.error("AXIOM REJECTED DATA:", errorDetail);
+      return NextResponse.json({ error: errorDetail }, { status: response.status });
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Axiom Ingest Error:", error);
-    return NextResponse.json({ error: 'Logging Failed' }, { status: 500 });
+    console.error("CRITICAL_SERVER_ERROR:", error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
