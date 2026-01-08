@@ -42,16 +42,19 @@ export default function SplunkPortfolioHome() {
 const fetchStats = async () => {
     try {
       const res = await fetch('/api/stats');
-      if (!res.ok) return;
       const json = await res.json();
       
-      // Update the dashboard state
-      setData({ 
-        stats: json.stats || [], 
-        audit: json.audit || [] 
-      });
+      // LOG THIS: See if the data actually reached the frontend
+      console.log("FRONTEND_RECEIVED_DATA:", json);
+
+      if (json.audit) {
+        setData({ 
+          stats: json.stats || [], 
+          audit: json.audit || [] 
+        });
+      }
     } catch (err) {
-      console.log("Waiting for cloud data...");
+      console.error("Frontend failed to fetch stats:", err);
     }
   };
 
