@@ -5,11 +5,8 @@ export async function GET() {
     const dataset = process.env.NEXT_PUBLIC_AXIOM_DATASET;
     const token = process.env.NEXT_PUBLIC_AXIOM_TOKEN;
 
-    if (!dataset || !token) {
-      return NextResponse.json({ stats: [], audit: [] });
-    }
-
-    const chartQuery = `['${dataset}'] | summarize count() by details`;
+    // This APL query pulls the last 50 events from Axiom
+    const aplQuery = `['${dataset}'] | order by _time desc | limit 50`;
 
     const res = await fetch(`https://api.axiom.co/v1/datasets/_apl?format=tabular`, {
       method: 'POST',
@@ -17,25 +14,33 @@ export async function GET() {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ apl: chartQuery }),
+      body: JSON.stringify({ apl: aplQuery }),
     });
 
-    if (!res.ok) {
-      // If Axiom fails, return empty arrays so the UI doesn't break
-      return NextResponse.json({ stats: [], audit: [] });
-    }
-
     const data = await res.json();
+
+    // Mapping Axiom's response to your website's table format
+    const events = (data.matches || []).map(entry => ({
+      _time: entry._time,
+      action: entry.action || "hover",
+      details: entry.details || "unknown"
+    }));
+
+    // Grouping for the Heatmap/Stats
+    const stats = events.reduce((acc, curr) => {
+      const found = acc.find(item => item.name === curr.details);
+      if (found) { found.value++; } 
+      else { acc.push({ name: curr.details, value: 1 }); }
+      return acc;
+    }, []);
+
     return NextResponse.json({
-      stats: (data.matches || []).map(r => ({
-        name: r.details || "Unknown",
-        value: r['count()'] || 0
-      })),
-      audit: data.matches || []
+      stats: stats,
+      audit: events
     });
 
   } catch (error) {
-    console.error("STATS_ROUTE_ERROR:", error.message);
+    console.error("Query Error:", error.message);
     return NextResponse.json({ stats: [], audit: [] });
   }
 }
