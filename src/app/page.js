@@ -21,38 +21,37 @@ export default function SplunkPortfolioHome() {
 
  // The core logging function - This sends data to Axiom via your Vercel route
   const logHover = async (action, details) => {
+    // THIS WILL SHOW IN YOUR BROWSER CONSOLE (Right Click > Inspect)
+    console.log("LOG_TRIGGERED:", action, details); 
+
     try {
-      await fetch('/api/log', {
+      const response = await fetch('/api/log', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          action, 
-          details,
-          source: "portfolio_frontend",
-          user_agent: navigator.userAgent 
-        }),
+        body: JSON.stringify({ action, details }),
       });
-      // We don't call fetchStats() immediately anymore because Axiom takes 
-      // a few seconds to index. Let the interval handle it.
+      
+      const result = await response.json();
+      console.log("SERVER_RESPONSE:", result);
     } catch (err) {
-      console.error("Axiom Logging Failed:", err);
+      console.error("FETCH_FAILED:", err);
     }
   };
 
   // This pulls the stats BACK from Axiom to show on your dashboard
-  const fetchStats = async () => {
+const fetchStats = async () => {
     try {
       const res = await fetch('/api/stats');
-      if (!res.ok) return; // Exit quietly if route isn't ready
-      
+      if (!res.ok) return;
       const json = await res.json();
-      // Ensure we are setting the data correctly based on the Axiom response
+      
+      // Update the dashboard state
       setData({ 
         stats: json.stats || [], 
         audit: json.audit || [] 
       });
     } catch (err) {
-      console.log("Waiting for Axiom data...");
+      console.log("Waiting for cloud data...");
     }
   };
 
@@ -99,15 +98,15 @@ export default function SplunkPortfolioHome() {
               <p className="italic text-gray-500 text-[10px] uppercase">This portfolio treats your visit as raw telemetry. Every hover is a data point.</p>
             </div>
 
-            <button 
-              onClick={() => {
-                setShowDisclaimer(false);
-                logHover('guide_read', 'Disclaimer_Closed');
-              }}
-              className="mt-8 w-full bg-[#1c1e21] hover:bg-[#65a637] text-white font-bold py-4 uppercase tracking-[0.3em] transition-all rounded-sm shadow-lg border-none"
-            >
-              Enter Dashboard
-            </button>
+<button 
+  onClick={() => {
+    setShowDisclaimer(false);
+    logHover('User_Action', 'Dashboard_Entered');
+  }}
+  className="mt-8 w-full bg-[#1c1e21] hover:bg-[#65a637] text-white font-bold py-4 uppercase tracking-[0.3em] transition-all rounded-sm"
+>
+  Enter Dashboard
+</button>
           </div>
         </div>
       )}
