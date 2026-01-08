@@ -1,38 +1,40 @@
 import { NextResponse } from 'next/server';
 
-export async function GET() {
-  return NextResponse.json({ 
-    status: "Alive", 
-    message: "The API route is correctly placed and accessible!",
-    timestamp: new Date().toISOString()
-  });
-}
-
 export async function POST(request) {
-  console.log("!!! INCOMING LOG REQUEST RECEIVED !!!");
   try {
     const body = await request.json();
     const endpoint = process.env.NEXT_PUBLIC_AXIOM_INGEST_ENDPOINT;
     const token = process.env.NEXT_PUBLIC_AXIOM_TOKEN;
 
-    if (!endpoint || !token) {
-      console.error("FAIL: Environment variables missing.");
-      return NextResponse.json({ error: "Missing Config" }, { status: 500 });
-    }
+    // AXIOM REQUIRES AN ARRAY OF OBJECTS
+    const axiomPayload = [{ 
+      ...body, 
+      _time: new Date().toISOString(),
+      source: "nextjs-vercel" 
+    }];
 
-    const res = await fetch(endpoint, {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify([{ ...body, _time: new Date().toISOString() }]),
+      body: JSON.stringify(axiomPayload),
     });
 
-    console.log("Axiom Response Status:", res.status);
-    return NextResponse.json({ success: res.ok });
-  } catch (err) {
-    console.error("ROUTE_ERROR:", err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("AXIOM_REJECTED:", errorText);
+      return NextResponse.json({ error: errorText }, { status: response.status });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("VERCEL_RUNTIME_ERROR:", error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
+}
+
+export async function GET() {
+  return NextResponse.json({ status: "Alive", message: "Log route is active." });
 }

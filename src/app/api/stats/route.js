@@ -5,8 +5,8 @@ export async function GET() {
     const dataset = process.env.NEXT_PUBLIC_AXIOM_DATASET;
     const token = process.env.NEXT_PUBLIC_AXIOM_TOKEN;
 
-    // This APL query pulls the last 50 events from Axiom
-    const aplQuery = `['${dataset}'] | order by _time desc | limit 50`;
+    // Pull the latest 50 events using APL
+    const query = `['${dataset}'] | order by _time desc | limit 50`;
 
     const res = await fetch(`https://api.axiom.co/v1/datasets/_apl?format=tabular`, {
       method: 'POST',
@@ -14,33 +14,34 @@ export async function GET() {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ apl: aplQuery }),
+      body: JSON.stringify({ apl: query }),
     });
 
     const data = await res.json();
 
-    // Mapping Axiom's response to your website's table format
-    const events = (data.matches || []).map(entry => ({
-      _time: entry._time,
-      action: entry.action || "hover",
-      details: entry.details || "unknown"
+    // MAP AXIOM DATA TO YOUR TABLE FIELDS
+    const events = (data.matches || []).map(m => ({
+      _time: m._time || new Date().toISOString(),
+      action: m.action || "hover",
+      details: m.details || "item_interacted"
     }));
 
-    // Grouping for the Heatmap/Stats
-    const stats = events.reduce((acc, curr) => {
-      const found = acc.find(item => item.name === curr.details);
-      if (found) { found.value++; } 
-      else { acc.push({ name: curr.details, value: 1 }); }
-      return acc;
-    }, []);
-
-    return NextResponse.json({
-      stats: stats,
-      audit: events
+    // Generate stats for your heatmap
+    const statsMap = {};
+    events.forEach(e => {
+      statsMap[e.details] = (statsMap[e.details] || 0) + 1;
     });
 
-  } catch (error) {
-    console.error("Query Error:", error.message);
+    const statsArray = Object.keys(statsMap).map(name => ({
+      name,
+      value: statsMap[name]
+    }));
+
+    return NextResponse.json({
+      stats: statsArray,
+      audit: events
+    });
+  } catch (err) {
     return NextResponse.json({ stats: [], audit: [] });
   }
 }
