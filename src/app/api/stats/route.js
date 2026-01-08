@@ -5,52 +5,29 @@ export async function GET() {
     const dataset = process.env.NEXT_PUBLIC_AXIOM_DATASET;
     const token = process.env.NEXT_PUBLIC_AXIOM_TOKEN;
 
-    if (!dataset || !token) {
-      console.error("STATS_ERROR: Missing Env Variables");
-      return NextResponse.json({ stats: [], audit: [] });
-    }
-
-    // APL query to get the raw events
-    const query = `['${dataset}'] | order by _time desc | limit 100`;
-
     const res = await fetch(`https://api.axiom.co/v1/datasets/_apl?format=tabular`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ apl: query }),
+      body: JSON.stringify({ apl: `['${dataset}'] | limit 10` }),
     });
 
-    const result = await res.json();
+    const data = await res.json();
     
-    // Axiom returns data in the 'matches' array
-    const rawMatches = result.matches || [];
+    // CHECK VERCEL LOGS FOR THIS:
+    console.log("FULL_AXIOM_RESPONSE:", JSON.stringify(data));
 
-    // 1. Format the 'Audit' table logs
-    const auditLogs = rawMatches.map(m => ({
-      _time: m._time || new Date().toISOString(),
-      action: m.action || "interaction",
-      details: m.details || "portfolio_event"
-    }));
-
-    // 2. Format the 'Stats' heatmap
-    const counts = {};
-    auditLogs.forEach(log => {
-      counts[log.details] = (counts[log.details] || 0) + 1;
-    });
-    const statsData = Object.keys(counts).map(key => ({
-      name: key,
-      value: counts[key]
-    }));
+    if (data.error || data.message === "Forbidden") {
+      console.error("AXIOM_PERMISSION_DENIED: Your token cannot query data.");
+    }
 
     return NextResponse.json({
-      stats: statsData,
-      audit: auditLogs
+      stats: (data.matches || []).map(m => ({ name: m.details, value: 1 })),
+      audit: data.matches || []
     });
-
-  } catch (error) {
-    console.error("API_STATS_CRASH:", error.message);
+  } catch (err) {
     return NextResponse.json({ stats: [], audit: [] });
   }
 }
