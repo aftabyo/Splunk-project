@@ -1,63 +1,39 @@
 import { NextResponse } from 'next/server';
 
 export async function GET() {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; 
-  const auth = Buffer.from(`${process.env.SPLUNK_USERNAME}:${process.env.SPLUNK_PASSWORD}`).toString('base64');
-  
-  const chartQuery = 'search index="main" | stats count by details';
-  const rawQuery = 'search index="main" | head 10 | table _time, action, details';
+  // APL Query equivalents for your SPL searches
+  const dataset = process.env.NEXT_PUBLIC_AXIOM_DATASET;
+  const chartQuery = `['${dataset}'] | summarize count() by details`;
+  const rawQuery = `['${dataset}'] | order by _time desc | take 10 | project _time, action, details`;
 
   try {
-    // We must use POST for the export endpoint
-    const [chartRes, rawRes] = await Promise.all([
-      fetch(`${process.env.SPLUNK_MANAGEMENT_URL}/services/search/jobs/export?output_mode=json`, {
+    const fetchAxiom = async (apl) => {
+      const res = await fetch(`https://api.axiom.co/v1/datasets/_apl?format=tabular`, {
         method: 'POST',
-        headers: { 
-          'Authorization': `Basic ${auth}`,
-          'Content-Type': 'application/x-www-form-urlencoded'
+        headers: {
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_AXIOM_TOKEN}`,
+          'Content-Type': 'application/json'
         },
-        body: new URLSearchParams({
-          search: chartQuery,
-          earliest_time: '0'
-        })
-      }),
-      fetch(`${process.env.SPLUNK_MANAGEMENT_URL}/services/search/jobs/export?output_mode=json`, {
-        method: 'POST',
-        headers: { 
-          'Authorization': `Basic ${auth}`,
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: new URLSearchParams({
-          search: rawQuery,
-          earliest_time: '0'
-        })
-      })
-    ]);
-
-    const chartText = await chartRes.text();
-    const rawText = await rawRes.text();
-
-    const parseSplunkData = (text) => {
-      if (!text || text.trim() === "") return [];
-      return text.trim().split('\n')
-        .filter(line => line.startsWith('{'))
-        .map(line => JSON.parse(line).result)
-        .filter(r => r !== undefined);
+        body: JSON.stringify({ apl })
+      });
+      return res.json();
     };
 
-    const chartResults = parseSplunkData(chartText);
-    const rawResults = parseSplunkData(rawText);
+    const [chartData, rawData] = await Promise.all([
+      fetchAxiom(chartQuery),
+      fetchAxiom(rawQuery)
+    ]);
 
     return NextResponse.json({
-      stats: chartResults.map(r => ({
+      stats: (chartData.matches || []).map(r => ({
         name: r.details || "Unknown_Event",
-        value: parseInt(r.count) || 0
+        value: r['count()'] || 0
       })),
-      audit: rawResults
+      audit: rawData.matches || []
     });
 
   } catch (error) {
-    console.error("API_FETCH_ERROR:", error.message);
+    console.error("AXIOM_STATS_ERROR:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

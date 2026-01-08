@@ -1,35 +1,35 @@
 import { NextResponse } from 'next/server';
 
-// ADD THIS LINE HERE:
-// This tells Node.js to trust the self-signed certificate from your local machine/ngrok.
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; 
-
 export async function POST(request) {
   try {
     const body = await request.json();
-    const splunkPayload = {
-      event: { 
-        ...body, 
-        project: "aftabyo-portfolio",
-        visitor_ip: request.headers.get('x-forwarded-for') || '127.0.0.1'
-      },
-      sourcetype: "portfolio_event",
-      index: "main" 
-    };
+    
+    // Axiom expects an array of objects for ingestion
+    const axiomPayload = [{
+      ...body,
+      project: "aftabyo-portfolio",
+      visitor_ip: request.headers.get('x-forwarded-for') || '127.0.0.1',
+      _time: new Date().toISOString()
+    }];
 
-    // Use your new ngrok URL here if you haven't updated your Vercel .env yet
-    await fetch(process.env.SPLUNK_HEC_URL, {
+    // Axiom Ingest URL format: https://api.axiom.co/v1/datasets/{dataset_name}/ingest
+    const response = await fetch(`https://api.axiom.co/v1/datasets/${process.env.NEXT_PUBLIC_AXIOM_DATASET}/ingest`, {
       method: 'POST',
       headers: {
-        'Authorization': `Splunk ${process.env.SPLUNK_HEC_TOKEN}`,
+        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_AXIOM_TOKEN}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(splunkPayload),
+      body: JSON.stringify(axiomPayload),
     });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Axiom Ingest Failed: ${errorText}`);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("HEC Error:", error);
+    console.error("Axiom Ingest Error:", error);
     return NextResponse.json({ error: 'Logging Failed' }, { status: 500 });
   }
 }
