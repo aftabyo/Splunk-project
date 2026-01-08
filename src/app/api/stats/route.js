@@ -5,27 +5,28 @@ export async function GET() {
     const dataset = process.env.NEXT_PUBLIC_AXIOM_DATASET;
     const token = process.env.NEXT_PUBLIC_AXIOM_TOKEN;
 
+    // Simplest possible query to just get raw rows
     const res = await fetch(`https://api.axiom.co/v1/datasets/_apl?format=tabular`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ apl: `['${dataset}'] | limit 10` }),
+      body: JSON.stringify({ apl: `['${dataset}'] | take 50` }),
     });
 
     const data = await res.json();
     
-    // CHECK VERCEL LOGS FOR THIS:
-    console.log("FULL_AXIOM_RESPONSE:", JSON.stringify(data));
-
-    if (data.error || data.message === "Forbidden") {
-      console.error("AXIOM_PERMISSION_DENIED: Your token cannot query data.");
+    // If Axiom returns an error message instead of data, we catch it here
+    if (data.message || data.error) {
+       console.error("AXIOM_API_ERROR:", data.message || data.error);
     }
 
+    const matches = data.matches || [];
+
     return NextResponse.json({
-      stats: (data.matches || []).map(m => ({ name: m.details, value: 1 })),
-      audit: data.matches || []
+      stats: matches.map(m => ({ name: m.details || 'hover', value: 1 })),
+      audit: matches
     });
   } catch (err) {
     return NextResponse.json({ stats: [], audit: [] });
