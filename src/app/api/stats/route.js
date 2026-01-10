@@ -5,28 +5,28 @@ export async function GET() {
     const dataset = process.env.NEXT_PUBLIC_AXIOM_DATASET;
     const token = process.env.NEXT_PUBLIC_AXIOM_TOKEN;
 
-    // Simplest possible query to just get raw rows
+    // Direct APL query to Axiom
     const res = await fetch(`https://api.axiom.co/v1/datasets/_apl?format=tabular`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ apl: `['${dataset}'] | take 50` }),
+      body: JSON.stringify({ apl: `['${dataset}'] | order by _time desc | limit 50` }),
     });
 
     const data = await res.json();
     
-    // If Axiom returns an error message instead of data, we catch it here
-    if (data.message || data.error) {
-       console.error("AXIOM_API_ERROR:", data.message || data.error);
-    }
-
-    const matches = data.matches || [];
+    // Axiom returns results in 'matches'
+    const logs = (data.matches || []).map(m => ({
+      _time: m._time,
+      action: m.action || 'hover',
+      details: m.details || 'interaction'
+    }));
 
     return NextResponse.json({
-      stats: matches.map(m => ({ name: m.details || 'hover', value: 1 })),
-      audit: matches
+      stats: logs.map(l => ({ name: l.details, value: 1 })),
+      audit: logs
     });
   } catch (err) {
     return NextResponse.json({ stats: [], audit: [] });
