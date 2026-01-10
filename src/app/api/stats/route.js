@@ -2,48 +2,48 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    // HARDCODED FOR DIAGNOSTIC TEST
-    // We are bypassing process.env to eliminate Vercel sync issues
-    const dataset = 'portfolio-logs';
-    const token = 'xaat-bd9de253-4f75-428e-a743-2859ccb0019f'; 
+    // 1. Get Secrets from Vercel Environment
+    const dataset = process.env.NEXT_PUBLIC_AXIOM_DATASET || 'portfolio-logs';
+    const token = process.env.NEXT_PUBLIC_AXIOM_TOKEN;
 
-    console.log("DIAGNOSTIC: Using Hardcoded Token...");
+    if (!token) {
+      return NextResponse.json({ error: 'Token missing', stats: [], audit: [] });
+    }
 
-    const res = await fetch(`https://api.axiom.co/v1/datasets/_apl?format=tabular`, {
+    // 2. The URL Fix: We MUST use '?format=legacy' just like the Python script
+    const url = "https://api.axiom.co/v1/datasets/_apl?format=legacy";
+
+    // 3. The Query: Fetch last 100 events
+    const query = `['${dataset}'] | sort by _time desc | limit 100`;
+
+    const res = await fetch(url, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      // Simple query to get the last 100 events
-      body: JSON.stringify({ apl: `['${dataset}'] | sort by _time desc | limit 100` }),
+      body: JSON.stringify({ apl: query }),
     });
 
     const data = await res.json();
 
-    // IF AXIOM RETURNS AN ERROR, WE WILL SEE IT NOW
-    if (data.message) {
-      console.error("AXIOM_ERROR:", data.message);
-      return NextResponse.json({ error: data.message, stats: [], audit: [] });
-    }
-
-    const matches = data.matches || [];
-
-    // Map Axiom data to your UI format
-    const events = matches.map(m => ({
+    // 4. Parse the 'matches' array (legacy format)
+    const logs = (data.matches || []).map(m => ({
       _time: m._time,
       action: m.action || "interaction",
-      details: m.details || "portfolio_event",
-      _raw: JSON.stringify(m)
+      details: m.details || "unknown_item",
+      // We send raw JSON so you can inspect it if needed
+      raw: JSON.stringify(m)
     }));
 
+    // 5. Return to Frontend
     return NextResponse.json({
-      stats: events.map(e => ({ name: e.details, value: 1 })),
-      audit: events
+      stats: logs.map(l => ({ name: l.details, value: 1 })),
+      audit: logs
     });
 
   } catch (err) {
-    console.error("CRASH:", err.message);
+    console.error("STATS API ERROR:", err);
     return NextResponse.json({ stats: [], audit: [] });
   }
 }
