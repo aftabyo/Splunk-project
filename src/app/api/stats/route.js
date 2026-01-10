@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    const dataset = process.env.NEXT_PUBLIC_AXIOM_DATASET;
-    const token = process.env.NEXT_PUBLIC_AXIOM_TOKEN;
+    // HARDCODED FOR DIAGNOSTIC TEST
+    // We are bypassing process.env to eliminate Vercel sync issues
+    const dataset = 'portfolio-logs';
+    const token = 'xaat-bd9de253-4f75-428e-a743-2859ccb0019f'; 
 
-    // Simplest possible query: "Give me everything"
-    const aplQuery = `['${dataset}'] | limit 100`;
+    console.log("DIAGNOSTIC: Using Hardcoded Token...");
 
     const res = await fetch(`https://api.axiom.co/v1/datasets/_apl?format=tabular`, {
       method: 'POST',
@@ -14,26 +15,35 @@ export async function GET() {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ apl: aplQuery }),
+      // Simple query to get the last 100 events
+      body: JSON.stringify({ apl: `['${dataset}'] | sort by _time desc | limit 100` }),
     });
 
     const data = await res.json();
-    
-    // Check your Vercel logs for this output!
-    console.log("AXIOM_RAW_DATA:", JSON.stringify(data));
 
-    const events = (data.matches || []).map(m => ({
-      _time: m._time || new Date().toISOString(),
+    // IF AXIOM RETURNS AN ERROR, WE WILL SEE IT NOW
+    if (data.message) {
+      console.error("AXIOM_ERROR:", data.message);
+      return NextResponse.json({ error: data.message, stats: [], audit: [] });
+    }
+
+    const matches = data.matches || [];
+
+    // Map Axiom data to your UI format
+    const events = matches.map(m => ({
+      _time: m._time,
       action: m.action || "interaction",
-      details: m.details || "portfolio_item"
+      details: m.details || "portfolio_event",
+      _raw: JSON.stringify(m)
     }));
 
     return NextResponse.json({
       stats: events.map(e => ({ name: e.details, value: 1 })),
       audit: events
     });
+
   } catch (err) {
-    console.error("STATS_API_CRASH:", err.message);
+    console.error("CRASH:", err.message);
     return NextResponse.json({ stats: [], audit: [] });
   }
 }
