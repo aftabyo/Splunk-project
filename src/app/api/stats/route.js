@@ -5,7 +5,6 @@ export async function GET() {
     const dataset = process.env.NEXT_PUBLIC_AXIOM_DATASET;
     const token = process.env.NEXT_PUBLIC_AXIOM_TOKEN;
 
-    // Direct APL query to Axiom
     const res = await fetch(`https://api.axiom.co/v1/datasets/_apl?format=tabular`, {
       method: 'POST',
       headers: {
@@ -17,16 +16,18 @@ export async function GET() {
 
     const data = await res.json();
     
-    // Axiom returns results in 'matches'
-    const logs = (data.matches || []).map(m => ({
+    // Check Vercel Logs for this if it's still empty!
+    if (data.message) console.log("AXIOM_API_MESSAGE:", data.message);
+
+    const events = (data.matches || []).map(m => ({
       _time: m._time,
-      action: m.action || 'hover',
-      details: m.details || 'interaction'
+      action: m.action || "hover",
+      details: m.details || "item"
     }));
 
     return NextResponse.json({
-      stats: logs.map(l => ({ name: l.details, value: 1 })),
-      audit: logs
+      stats: events.map(e => ({ name: e.details, value: 1 })),
+      audit: events
     });
   } catch (err) {
     return NextResponse.json({ stats: [], audit: [] });
